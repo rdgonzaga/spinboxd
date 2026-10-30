@@ -19,11 +19,33 @@ function writeCache(name, slugs) {
 }
 
 // Everyone can read skips and watched; only signed-in owners can write (firestore.rules).
-// Calls onChange({ skips, watched, user, denied }) right away with the cached sets, then again
+// Calls onChange({ skips, watched, watchedAt, user, denied, synced }) right away with the cached sets, then again
 // on every Firestore snapshot or auth change. If Firebase can't load, the cache is used and
 // nobody is signed in, so the site stays read-only.
+function readDates() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("spinboxd.watchedAt")) || {};
+    return new Map(Object.entries(raw).map(([slug, iso]) => [slug, new Date(iso)]));
+  } catch {
+    return new Map();
+  }
+}
+
+function writeDates(dates) {
+  try {
+    const raw = {};
+    for (const [slug, d] of dates) if (d) raw[slug] = d.toISOString();
+    localStorage.setItem("spinboxd.watchedAt", JSON.stringify(raw));
+  } catch {}
+}
+
 export function initCloud(onChange) {
-  const state = { skips: readCache("skips"), watched: readCache("watched"), user: null, denied: false };
+  let cached = false;
+  try {
+    cached = localStorage.getItem("spinboxd.watched") !== null;
+  } catch {}
+  // synced: the watched set is trustworthy (from cache or a snapshot), so counts can show
+  const state = { skips: readCache("skips"), watched: readCache("watched"), watchedAt: readDates(), user: null, denied: false, synced: cached };
   const emit = () => onChange({ ...state });
   emit();
 
@@ -51,6 +73,11 @@ export function initCloud(onChange) {
           (snap) => {
             state[name] = new Set(snap.docs.map((d) => d.id));
             writeCache(name, state[name]);
+            if (name === "watched") {
+              state.synced = true;
+              state.watchedAt = new Map(snap.docs.map((d) => [d.id, d.data().at?.toDate?.() ?? null]));
+              writeDates(state.watchedAt);
+            }
             emit();
           },
           (err) => console.warn(`${name}: read failed`, err.code || err),
@@ -58,6 +85,8 @@ export function initCloud(onChange) {
       }
     } catch (err) {
       console.warn("Firebase unavailable", err);
+      state.synced = true;
+      emit();
     }
   })();
 
@@ -77,7 +106,21 @@ export function initCloud(onChange) {
     }
   }
 
+  // returns an error code, or null on success; kept apart from toggle() so a missing
+  // update rule doesn't flag the whole account as read-only
+  async function setWatchedAt(slug, date) {
+    if (!api || !state.user) return "signed-out";
+    try {
+      await api.fs.setDoc(api.fs.doc(api.db, "watched", slug), { at: api.fs.Timestamp.fromDate(date) });
+      return null;
+    } catch (err) {
+      console.warn("watched date: write failed", err.code || err);
+      return err.code || "unknown";
+    }
+  }
+
   return {
+    setWatchedAt,
     toggleSkip: (slug) => toggle("skips", slug),
     toggleWatched: (slug) => toggle("watched", slug),
     async signIn() {

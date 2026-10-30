@@ -17,7 +17,7 @@ function sized(url, size) {
   return url.replace(/\/w\d+\//, `/${size}/`);
 }
 
-export function posterEl(film, { eager = false, size = "w185" } = {}) {
+export function posterEl(film, { eager = false, size = "w342" } = {}) {
   const box = document.createElement("div");
   box.className = "poster";
 

@@ -1,11 +1,14 @@
 import { loadWatchlist } from "./data.js";
-import { applyFilters, filterOptions, poolFor, randomInt, withoutSkipped } from "./pool.js";
-import { NO_FILTERS, isActive, loadFilters, renderFilters } from "./filters.js";
+import { SORTS, applyFilters, filterOptions, poolFor, randomInt, sortFilms, withoutSkipped } from "./pool.js";
+import { NO_FILTERS, isActive, loadFilters, renderFilters, save as saveFilters } from "./filters.js";
 import { posterEl } from "./poster.js";
 import { spin, stopReel } from "./reel.js";
 import { showResult } from "./result.js";
 import { copyOrShare, parsePickHash, pickHash, shareLink } from "./share.js";
 import { initCloud } from "./cloud.js";
+import { providerBadge } from "./providers.js";
+import { openDatePicker } from "./datepicker.js";
+import { dropdown } from "./dropdown.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -28,22 +31,50 @@ const store = {
 let data;
 let source;
 let filters = NO_FILTERS;
+const VIEWS = ["large", "small", "list"];
+let sort = "list";
+let view = "large";
 let options;
 let skipped = new Set();
 let watched = new Set();
+let watchedAt = new Map();
 let user = null;
 let denied = false;
+let synced = true;
 let cloud;
 let spinId = 0;
 let current = null;
+let lastPick = store.get("spinboxd.last");
 let copyTimer;
 
-function present(film) {
+// browse: opened from a tile click, so it isn't "tonight's pick" and doesn't become the last pick
+function present(film, { browse = false } = {}) {
   current = film;
+  $("result-eyebrow").textContent = browse ? "Details" : "Tonight's pick";
+  if (!browse && film.slug !== lastPick) {
+    lastPick = film.slug;
+    store.set("spinboxd.last", lastPick);
+    renderPool();
+  }
+  $("respin").textContent = browse ? "Pick a film" : "Spin again";
+  $("respin").hidden = source === "watched";
   showResult(film);
   renderResultMark();
   setView("result");
-  history.replaceState(null, "", pickHash(film.slug));
+  if (browse) clearHash();
+  else history.replaceState(null, "", pickHash(film.slug));
+}
+
+function focusResult() {
+  ($("respin").hidden ? $("result-title") : $("respin")).focus();
+}
+
+function openFilm(film) {
+  spinId++;
+  stopReel($("strip"));
+  if (!$("stage").open) $("stage").showModal();
+  present(film, { browse: true });
+  focusResult();
 }
 
 function openShared() {
@@ -54,7 +85,7 @@ function openShared() {
   stopReel($("strip"));
   if (!$("stage").open) $("stage").showModal();
   present(film);
-  $("respin").focus();
+  focusResult();
 }
 
 async function copyLink() {
@@ -93,7 +124,7 @@ function renderSources() {
       chip.setAttribute("aria-pressed", String(key === source));
       const count = document.createElement("span");
       count.className = "n";
-      count.textContent = key === "watched" ? listFor(key).length : withoutSkipped(listFor(key), skipped).length;
+      if (synced) count.textContent = key === "watched" ? listFor(key).length : withoutSkipped(listFor(key), skipped).length;
       chip.append(sourceLabel(key), count);
       chip.addEventListener("click", () => {
         source = key;
@@ -159,42 +190,191 @@ function caption(film) {
   return el;
 }
 
+function renderViewOpts() {
+  $("sort").replaceChildren(
+    dropdown({
+      label: "Sort by",
+      prefix: "Sort by",
+      choices: Object.entries(SORTS),
+      value: sort,
+      onPick: (key) => {
+        sort = key;
+        store.set("spinboxd.sort", sort);
+        renderViewOpts();
+        renderPool();
+      },
+    }),
+  );
+  for (const key of VIEWS) $(`view-${key}`).setAttribute("aria-pressed", String(view === key));
+  for (const key of VIEWS) $("grid").classList.toggle(`is-${key}`, view === key);
+}
+
+function rowMeta(film) {
+  const meta = document.createElement("span");
+  meta.className = "row-meta";
+  const bits = [
+    film.year,
+    film.rating ? `★ ${film.rating.toFixed(1)}` : "",
+    film.runtime ? `${film.runtime} min` : "",
+  ].filter(Boolean);
+  meta.textContent = bits.join(" · ");
+  const stream = film.providers?.stream || [];
+  if (stream.length) {
+    const row = document.createElement("span");
+    row.className = "plogos";
+    for (const name of stream) row.append(providerBadge(name, film.providers) || `${name} `);
+    meta.append(row);
+  }
+  return meta;
+}
+
+function timeAgo(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+function dayLabel(d) {
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+// Watched tab: the day each film was marked. Signed-in owners click it to change the day.
+function tileFoot(film) {
+  const at = watchedAt.get(film.slug);
+  const editable = user && !denied;
+  if (!at && !editable) return null;
+  if (!editable) {
+    const span = document.createElement("span");
+    span.className = "tile-foot";
+    span.textContent = dayLabel(at);
+    return span;
+  }
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "tile-foot is-editable";
+  btn.textContent = at ? dayLabel(at) : "Set date";
+  btn.title = "Change the date you watched it";
+  btn.setAttribute("aria-haspopup", "dialog");
+  btn.setAttribute("aria-label", `Date watched: ${film.title}, ${at ? dayLabel(at) : "not set"}. Change`);
+  btn.addEventListener("click", () =>
+    openDatePicker(btn, {
+      value: at,
+      max: new Date(),
+      label: `Date watched: ${film.title}`,
+      onPick: async (date) => {
+        const error = await cloud.setWatchedAt(film.slug, date);
+        if (!error) return;
+        $("note").textContent =
+          error === "permission-denied"
+            ? "Couldn't save the date. Publish the latest firestore.rules (they need an update rule)."
+            : `Couldn't save the date (${error}).`;
+        $("note").hidden = false;
+      },
+    }),
+  );
+  return btn;
+}
+
+function renderListMeta(inWatched) {
+  const meta = $("list-meta");
+  const bar = $("progress");
+  $("lead").textContent = inWatched ? "What you've watched" : "What do you wanna watch?";
+  bar.hidden = !inWatched;
+  const src = data.sources[source];
+  const stamp = src ? src.scraped_at : data.generated_at;
+  if (inWatched) {
+    const total = data.films.length;
+    const pct = total ? Math.round((watched.size / total) * 100) : 0;
+    meta.textContent = `${watched.size} of ${total} films · ${pct}%`;
+    $("progress-bar").style.width = `${pct}%`;
+    meta.hidden = false;
+  } else {
+    meta.textContent = stamp ? `Updated ${timeAgo(stamp)}` : "";
+    meta.hidden = !stamp;
+  }
+}
+
 function renderPool() {
   const inWatched = source === "watched";
-  const shown = applyFilters(listFor(source), filters);
+  const shown = sortFilms(applyFilters(listFor(source), filters), sort);
   const pool = inWatched ? [] : withoutSkipped(shown, skipped);
+  const active = document.activeElement;
+  const activeLi = active?.closest?.("#grid li");
+  const keep = activeLi && {
+    slug: activeLi.dataset.slug,
+    index: [...$("grid").children].indexOf(activeLi),
+    cls: active.classList[0],
+  };
   $("grid").replaceChildren(
     ...shown.map((film) => {
       const isSkipped = skipped.has(film.slug);
       const li = document.createElement("li");
+      li.dataset.slug = film.slug;
       li.classList.toggle("is-skipped", isSkipped);
+      if (film.slug === lastPick && !inWatched) {
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = "Last pick";
+        li.append(badge);
+      }
       const a = document.createElement("a");
       a.className = "tile";
       a.href = film.url;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
+      // a plain click opens the details card; modified clicks still go to Letterboxd
+      a.addEventListener("click", (e) => {
+        if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openFilm(film);
+      });
       a.title = film.year ? `${film.title} (${film.year})` : film.title;
-      a.append(posterEl(film), caption(film));
+      if (view === "list") {
+        const title = document.createElement("strong");
+        title.className = "row-title";
+        title.textContent = film.title;
+        const text = document.createElement("span");
+        text.className = "row-text";
+        text.append(title, rowMeta(film));
+        a.append(posterEl(film), text);
+      } else {
+        a.append(posterEl(film, { size: view === "large" ? "w500" : "w342" }), caption(film));
+      }
       li.append(a);
+      const foot = inWatched && tileFoot(film);
+      if (foot) li.append(foot);
+      li.classList.toggle("has-foot", Boolean(foot));
       if (user) {
-        if (!inWatched) li.append(markButton("skip", film, isSkipped, () => cloud?.toggleSkip(film.slug)));
-        li.append(markButton("watched", film, inWatched, () => cloud?.toggleWatched(film.slug)));
+        const acts = document.createElement("div");
+        acts.className = "acts";
+        acts.append(markButton("watched", film, inWatched, () => toggleWatched(film)));
+        if (!inWatched) acts.append(markButton("skip", film, isSkipped, () => cloud?.toggleSkip(film.slug)));
+        li.append(acts);
       }
       return li;
     }),
   );
+
+  if (keep) {
+    const items = [...$("grid").children];
+    const same = items.find((li) => li.dataset.slug === keep.slug);
+    const target = same?.querySelector(`.${keep.cls}`) || (same || items[Math.min(keep.index, items.length - 1)])?.querySelector(".tile");
+    target?.focus();
+  }
+
+  renderListMeta(inWatched);
 
   const note = staleNote();
   $("note").textContent = note;
   $("note").hidden = !note;
 
   const skippedCount = shown.length - pool.length;
+  renderEmpty(shown.length === 0, inWatched);
   if (!shown.length) {
-    $("count").textContent = isActive(filters)
-      ? "Nothing matches those filters."
-      : inWatched
-        ? "Nothing watched yet."
-        : "Nothing in this list yet.";
+    $("count").textContent = inWatched ? "0 watched" : "0 films";
   } else if (inWatched) {
     $("count").textContent = `${shown.length} watched`;
   } else if (!pool.length) {
@@ -208,8 +388,52 @@ function renderPool() {
   $("pick").disabled = pool.length === 0;
 }
 
+function renderEmpty(empty, inWatched) {
+  $("empty").hidden = !empty;
+  if (!empty) return;
+  const filtered = isActive(filters);
+  $("empty-clear").hidden = !filtered;
+  $("empty-text").textContent = filtered
+    ? "No films match these filters."
+    : inWatched
+      ? user
+        ? "Nothing watched yet. Mark a film watched from its poster, or from the card after a pick."
+        : "Nothing watched yet."
+      : "Nothing in this list yet.";
+}
+
+// one undo at a time; a new action replaces the old offer
+let toastTimer;
+function offerUndo(text, undo) {
+  clearTimeout(toastTimer);
+  $("toast-text").textContent = text;
+  $("toast").hidden = false;
+  $("toast-undo").onclick = () => {
+    hideToast();
+    undo();
+  };
+  toastTimer = setTimeout(hideToast, 6000);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  $("toast").hidden = true;
+}
+
+// marking watched (or moving back) takes the film out of the current tab, so offer an undo
+async function toggleWatched(film) {
+  const was = watched.has(film.slug);
+  const at = watchedAt.get(film.slug);
+  if (!(await cloud?.toggleWatched(film.slug))) return false;
+  offerUndo(was ? `Moved ${film.title} back to the list` : `Marked ${film.title} watched`, () =>
+    was && at ? cloud.setWatchedAt(film.slug, at) : cloud.toggleWatched(film.slug),
+  );
+  return true;
+}
+
 function renderAuth() {
-  $("who").textContent = user ? (denied ? `${user.email} can't edit` : user.email) : "";
+  $("who").textContent = user ? (denied ? "View only" : user.email) : "";
+  $("who").title = user ? (denied ? `${user.email} can't edit` : user.email) : "";
   $("auth").textContent = user ? "Sign out" : "Sign in";
 }
 
@@ -235,7 +459,7 @@ async function pick() {
   }
 
   present(winner);
-  $("respin").focus();
+  focusResult();
 }
 
 function clearHash() {
@@ -263,15 +487,32 @@ async function init() {
   options = filterOptions(data.films);
   filters = loadFilters(options);
 
+  const savedSort = store.get("spinboxd.sort");
+  sort = savedSort in SORTS ? savedSort : "list";
+  const savedView = store.get("spinboxd.view");
+  view = VIEWS.includes(savedView) ? savedView : "large";
+
   renderSources();
   renderFilterBar();
+  renderViewOpts();
   renderPool();
+
+  for (const key of VIEWS) {
+    $(`view-${key}`).addEventListener("click", () => {
+      view = key;
+      store.set("spinboxd.view", key);
+      renderViewOpts();
+      renderPool();
+    });
+  }
 
   cloud = initCloud((next) => {
     skipped = next.skips;
     watched = next.watched;
+    watchedAt = next.watchedAt;
     user = next.user;
     denied = next.denied;
+    synced = next.synced;
     renderSources();
     renderPool();
     renderAuth();
@@ -281,12 +522,19 @@ async function init() {
   $("auth").addEventListener("click", async () => {
     if (user) return cloud.signOut();
     const error = await cloud.signIn();
-    if (error) $("who").textContent = `Sign-in failed (${error})`;
+    if (error) {
+      $("note").textContent = `Couldn't sign in (${error}).`;
+      $("note").hidden = false;
+    }
   });
   $("result-watched").addEventListener("click", async () => {
-    if (current && (await cloud.toggleWatched(current.slug))) closeStage();
+    if (current && (await toggleWatched(current))) closeStage();
   });
 
+  $("empty-clear").addEventListener("click", () => {
+    saveFilters(NO_FILTERS);
+    onFilters(NO_FILTERS);
+  });
   $("pick").addEventListener("click", pick);
   $("respin").addEventListener("click", pick);
   $("close").addEventListener("click", closeStage);
@@ -295,6 +543,13 @@ async function init() {
     spinId++;
     stopReel($("strip"));
     clearHash();
+  });
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (e.key !== " " || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if ($("stage").open || t.closest("button, a, select, input, textarea")) return;
+    e.preventDefault();
+    pick();
   });
   window.addEventListener("hashchange", openShared);
   openShared();

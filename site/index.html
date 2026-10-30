@@ -18,7 +18,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314181c'/%3E%3Ccircle cx='8' cy='16' r='5' fill='%23ff8000'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%2300e054'/%3E%3Ccircle cx='24' cy='16' r='5' fill='%2340bcf4'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -29,6 +29,10 @@
         <h1 class="wordmark">spinboxd</h1>
       </a>
       <nav class="sources" id="sources" role="group" aria-label="Film source"></nav>
+      <div class="account">
+        <span class="who" id="who"></span>
+        <button class="link-btn" id="auth" type="button">Sign in</button>
+      </div>
     </div>
   </header>
 
@@ -37,18 +41,42 @@
     <p class="note" id="note" hidden></p>
 
     <div class="heading">
-      <p class="count" id="count" aria-live="polite"></p>
+      <div class="lead-block">
+        <a class="lb-link" href="https://letterboxd.com/rdgonzaga/list/rai-and-ias/" target="_blank" rel="noopener noreferrer">rai and ia's list on Letterboxd ↗</a>
+        <h2 class="lead" id="lead">What do you wanna watch?</h2>
+        <p class="count" id="count" aria-live="polite"></p>
+        <p class="list-meta" id="list-meta" hidden></p>
+        <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+      </div>
       <button class="btn btn-primary" id="pick" type="button" disabled>Pick a film</button>
     </div>
 
-    <div class="filters" id="filters"></div>
+    <div class="toolbar">
+      <div class="filters" id="filters"></div>
+      <div class="view-opts">
+        <div id="sort"></div>
+        <div class="view-toggle" role="group" aria-label="View">
+          <button type="button" id="view-large" aria-label="Large tiles" title="Large tiles"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="16"/><rect x="13" y="4" width="7" height="16"/></svg></button>
+          <button type="button" id="view-small" aria-label="Small tiles" title="Small tiles"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg></button>
+          <button type="button" id="view-list" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+        </div>
+      </div>
+    </div>
 
     <ul class="grid" id="grid"></ul>
+    <div class="empty" id="empty" hidden>
+      <p id="empty-text"></p>
+      <button class="btn btn-quiet" id="empty-clear" type="button" hidden>Clear filters</button>
+    </div>
   </main>
 
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button class="link-btn" id="toast-undo" type="button">Undo</button>
+  </div>
+
   <footer class="wrap credit">
-    <p>Rai &amp; Ia's watchlist, from <a href="https://letterboxd.com/rdgonzaga/list/rai-and-ias-watch-list/" target="_blank" rel="noopener noreferrer">our list on Letterboxd</a>. Film data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming data from <a href="https://www.justwatch.com/" target="_blank" rel="noopener noreferrer">JustWatch</a>.</p>
-    <p class="auth"><span id="who"></span> <button class="link-btn" id="auth" type="button">Sign in</button></p>
+    <p>Rai &amp; Ia's watchlist, from <a href="https://letterboxd.com/rdgonzaga/list/rai-and-ias/" target="_blank" rel="noopener noreferrer">our list on Letterboxd</a>. Film data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming data from <a href="https://www.justwatch.com/" target="_blank" rel="noopener noreferrer">JustWatch</a>.</p>
   </footer>
 
   <dialog class="stage" id="stage" aria-label="Tonight's pick">
@@ -59,12 +87,12 @@
       <div class="reel-strip" id="strip"></div>
     </div>
     <article class="result" id="result" hidden>
+      <div class="result-backdrop" id="result-backdrop" aria-hidden="true"></div>
       <div class="result-poster" id="result-poster"></div>
       <div class="result-body">
-        <p class="eyebrow">Tonight's pick</p>
+        <p class="eyebrow" id="result-eyebrow">Tonight's pick</p>
         <h2 id="result-title" tabindex="-1"></h2>
         <p class="result-meta" id="result-meta"></p>
-        <p class="result-rating" id="result-rating" hidden></p>
         <p class="result-overview" id="result-overview" hidden></p>
         <button class="link-btn more" id="result-more" type="button" hidden>More</button>
         <p class="result-providers" id="result-providers" hidden></p>
