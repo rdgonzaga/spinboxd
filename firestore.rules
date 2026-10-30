@@ -1,12 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // one doc per skipped film, id is the Letterboxd slug
+    // Only the two owners can write. Anyone can read.
+    // Real addresses live in the Firebase console copy of these rules; this repo is public,
+    // so the committed file uses placeholders. Replace both before publishing.
+    function isOwner() {
+      return request.auth != null
+          && request.auth.token.email_verified == true
+          && request.auth.token.email in ['owner-one@example.com', 'owner-two@example.com'];
+    }
+
+    // one doc per film, id is the Letterboxd slug
     match /skips/{slug} {
       allow read: if true;
-      allow create: if slug.matches('^[a-z0-9-]{1,120}$')
+      allow create: if isOwner()
+                    && slug.matches('^[a-z0-9-]{1,120}$')
                     && request.resource.data.keys().hasOnly(['at']);
-      allow delete: if true;
+      allow delete: if isOwner();
+    }
+
+    match /watched/{slug} {
+      allow read: if true;
+      allow create: if isOwner()
+                    && slug.matches('^[a-z0-9-]{1,120}$')
+                    && request.resource.data.keys().hasOnly(['at']);
+      allow delete: if isOwner();
     }
   }
 }

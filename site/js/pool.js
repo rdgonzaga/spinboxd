@@ -26,8 +26,12 @@ export function matches(film, { maxRuntime, genre, decade }) {
   return true;
 }
 
+export function applyFilters(films, filters) {
+  return films.filter((f) => matches(f, filters));
+}
+
 export function visibleFilms(data, source, filters) {
-  return poolFor(data, source).filter((f) => matches(f, filters));
+  return applyFilters(poolFor(data, source), filters);
 }
 
 export function withoutSkipped(films, skipped) {
