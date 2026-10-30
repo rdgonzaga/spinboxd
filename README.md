@@ -61,4 +61,4 @@ Without Firebase the site still works read-only from the last cached state.
 
 ## Wrong poster
 
-Add the film's slug and TMDB id to `data/tmdb_overrides.toml`.
+Add the film's slug and TMDB id to `data/tmdb_overrides.toml`. For a series, use `"tv/<id>"`.
