@@ -4,6 +4,7 @@ import { NO_FILTERS, isActive, loadFilters, renderFilters } from "./filters.js";
 import { posterEl } from "./poster.js";
 import { spin, stopReel } from "./reel.js";
 import { showResult } from "./result.js";
+import { copyOrShare, parsePickHash, pickHash, shareLink } from "./share.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -28,6 +29,35 @@ let source;
 let filters = NO_FILTERS;
 let options;
 let spinId = 0;
+let current = null;
+let copyTimer;
+
+function present(film) {
+  current = film;
+  showResult(film);
+  setView("result");
+  history.replaceState(null, "", pickHash(film.slug));
+}
+
+function openShared() {
+  const slug = parsePickHash(location.hash);
+  const film = slug && data.films.find((f) => f.slug === slug);
+  if (!film) return;
+  spinId++;
+  stopReel($("strip"));
+  if (!$("stage").open) $("stage").showModal();
+  present(film);
+  $("respin").focus();
+}
+
+async function copyLink() {
+  if (!current) return;
+  const btn = $("copy-link");
+  const result = await copyOrShare(shareLink(current.slug), current.title);
+  btn.textContent = result === "copied" ? "Link copied" : result === "failed" ? "Couldn't copy" : "Copy link";
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => (btn.textContent = "Copy link"), 2000);
+}
 
 function setView(view) {
   $("reel").hidden = view !== "reel";
@@ -123,9 +153,12 @@ async function pick() {
     if (id !== spinId) return;
   }
 
-  showResult(winner);
-  setView("result");
+  present(winner);
   $("respin").focus();
+}
+
+function clearHash() {
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
 }
 
 function closeStage() {
@@ -156,10 +189,14 @@ async function init() {
   $("pick").addEventListener("click", pick);
   $("respin").addEventListener("click", pick);
   $("close").addEventListener("click", closeStage);
+  $("copy-link").addEventListener("click", copyLink);
   $("stage").addEventListener("close", () => {
     spinId++;
     stopReel($("strip"));
+    clearHash();
   });
+  window.addEventListener("hashchange", openShared);
+  openShared();
 }
 
 init();
