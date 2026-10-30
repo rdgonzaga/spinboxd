@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // one doc per skipped film, id is the Letterboxd slug
+    match /skips/{slug} {
+      allow read: if true;
+      allow create: if slug.matches('^[a-z0-9-]{1,120}$')
+                    && request.resource.data.keys().hasOnly(['at']);
+      allow delete: if true;
+    }
+  }
+}
