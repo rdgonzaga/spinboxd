@@ -3,7 +3,7 @@ delay_seconds = 3
 
 [sources.shared]
 label = "Our list"
-url = "https://letterboxd.com/rdgonzaga/list/rai-and-ias-watch-list/"
+url = "https://letterboxd.com/rdgonzaga/list/rai-and-ias/"
 
 [sources.rai]
 label = "Rai"
