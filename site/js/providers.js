@@ -12,3 +12,16 @@ export function providerLine(providers) {
   }
   return { label: "Not listed in PH", names: [] };
 }
+
+// small round logo when the scraper saved one, else the plain name
+export function providerBadge(name, providers) {
+  const url = providers?.logos?.[name];
+  if (!url) return null;
+  const img = new Image();
+  img.src = url;
+  img.alt = name;
+  img.title = name;
+  img.className = "plogo";
+  img.loading = "lazy";
+  return img;
+}

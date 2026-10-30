@@ -24,6 +24,10 @@ service cloud.firestore {
       allow create: if isOwner()
                     && slug.matches('^[a-z0-9-]{1,120}$')
                     && request.resource.data.keys().hasOnly(['at']);
+      // editing the watched date
+      allow update: if isOwner()
+                    && request.resource.data.keys().hasOnly(['at'])
+                    && request.resource.data.at is timestamp;
       allow delete: if isOwner();
     }
   }

@@ -1,5 +1,5 @@
 import { posterEl } from "./poster.js";
-import { providerLine } from "./providers.js";
+import { providerBadge, providerLine } from "./providers.js";
 
 function runtimeText(min) {
   if (!min) return "";
@@ -19,7 +19,7 @@ export function showResult(film) {
   }
 
   const meta = document.getElementById("result-meta");
-  const parts = [runtimeText(film.runtime), (film.genres || []).join(", ")].filter(Boolean);
+  const parts = [film.rating ? `TMDB ${film.rating.toFixed(1)}` : "", runtimeText(film.runtime), (film.genres || []).join(", ")].filter(Boolean);
   meta.replaceChildren(
     ...parts.map((text) => {
       const span = document.createElement("span");
@@ -28,10 +28,6 @@ export function showResult(film) {
     }),
   );
   meta.hidden = parts.length === 0;
-
-  const rating = document.getElementById("result-rating");
-  rating.textContent = film.rating ? `TMDB ${film.rating.toFixed(1)}` : "";
-  rating.hidden = !film.rating;
 
   const overview = document.getElementById("result-overview");
   const more = document.getElementById("result-more");
@@ -55,19 +51,33 @@ export function showResult(film) {
   providers.hidden = !line;
   if (line) {
     const label = document.createElement("strong");
-    label.textContent = line.names.length ? `${line.label}: ` : line.label;
-    const text = line.names.join(", ");
-    const tail = film.providers.link
-      ? Object.assign(document.createElement("a"), {
+    label.textContent = line.label;
+    providers.append(label);
+    const names = line.names.length ? line.names : [];
+    for (const name of names) {
+      const chip = document.createElement("span");
+      chip.className = "chip-pill";
+      const logo = providerBadge(name, film.providers);
+      if (logo) chip.append(logo);
+      chip.append(name);
+      providers.append(chip);
+    }
+    if (film.providers.link) {
+      providers.append(
+        Object.assign(document.createElement("a"), {
           href: film.providers.link,
           target: "_blank",
           rel: "noopener noreferrer",
-          textContent: text || "Check TMDB",
-        })
-      : document.createTextNode(text);
-    providers.append(label, tail);
+          textContent: names.length ? "More on TMDB" : "Check TMDB",
+        }),
+      );
+    }
   }
 
-  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true, size: "w342" }));
+  const backdrop = document.getElementById("result-backdrop");
+  backdrop.style.backgroundImage = film.backdrop ? `url("${film.backdrop}")` : "";
+  backdrop.hidden = !film.backdrop;
+
+  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true, size: "w500" }));
   document.getElementById("result-link").href = film.url;
 }
