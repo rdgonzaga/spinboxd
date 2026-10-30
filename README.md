@@ -1,6 +1,8 @@
 # spinboxd
 
-Picks a film from our Letterboxd lists so we stop arguing about it. A Python scraper turns the lists into `site/data/watchlist.json`, and a static page spins a poster reel over it.
+![spinboxd](docs/screenshot.png)
+
+Rai & Ia's watchlist. Pulls our Letterboxd lists and picks a film for movie night. A Python scraper turns the lists into `site/data/watchlist.json`, and a static page spins a poster reel over it.
 
 Letterboxd has no API and blocks cloud IPs, so the scrape runs once a day in a GitHub Action instead of on every page load.
 
