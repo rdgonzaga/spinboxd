@@ -1,11 +1,11 @@
 import { loadWatchlist } from "./data.js";
-import { filterOptions, poolFor, randomInt, visibleFilms, withoutSkipped } from "./pool.js";
+import { applyFilters, filterOptions, poolFor, randomInt, withoutSkipped } from "./pool.js";
 import { NO_FILTERS, isActive, loadFilters, renderFilters } from "./filters.js";
 import { posterEl } from "./poster.js";
 import { spin, stopReel } from "./reel.js";
 import { showResult } from "./result.js";
 import { copyOrShare, parsePickHash, pickHash, shareLink } from "./share.js";
-import { initSkips } from "./skips.js";
+import { initCloud } from "./cloud.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -30,8 +30,10 @@ let source;
 let filters = NO_FILTERS;
 let options;
 let skipped = new Set();
-let skipsEnabled = false;
-let skipsApi;
+let watched = new Set();
+let user = null;
+let denied = false;
+let cloud;
 let spinId = 0;
 let current = null;
 let copyTimer;
@@ -39,6 +41,7 @@ let copyTimer;
 function present(film) {
   current = film;
   showResult(film);
+  renderResultMark();
   setView("result");
   history.replaceState(null, "", pickHash(film.slug));
 }
@@ -68,8 +71,20 @@ function setView(view) {
   $("result").hidden = view !== "result";
 }
 
+const sourceKeys = () => [...Object.keys(data.sources), "all", "watched"];
+
+// watched films live in their own tab and leave every other list
+function listFor(key) {
+  if (key === "watched") return data.films.filter((f) => watched.has(f.slug));
+  return poolFor(data, key).filter((f) => !watched.has(f.slug));
+}
+
+function sourceLabel(key) {
+  return key === "all" ? "All" : key === "watched" ? "Watched" : data.sources[key].label;
+}
+
 function renderSources() {
-  const keys = [...Object.keys(data.sources), "all"];
+  const keys = sourceKeys();
   $("sources").replaceChildren(
     ...keys.map((key) => {
       const chip = document.createElement("button");
@@ -78,8 +93,8 @@ function renderSources() {
       chip.setAttribute("aria-pressed", String(key === source));
       const count = document.createElement("span");
       count.className = "n";
-      count.textContent = withoutSkipped(poolFor(data, key), skipped).length;
-      chip.append(key === "all" ? "All" : data.sources[key].label, count);
+      count.textContent = key === "watched" ? listFor(key).length : withoutSkipped(listFor(key), skipped).length;
+      chip.append(sourceLabel(key), count);
       chip.addEventListener("click", () => {
         source = key;
         store.set("spinboxd.source", key);
@@ -115,16 +130,20 @@ function renderFilterBar() {
 const EYE = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
 const EYE_OFF = EYE + '<path d="M3 3l18 18"/>';
 
-function skipButton(film, isSkipped) {
+const CHECK = '<path d="M5 12.5l4.5 4.5L19 7.5"/>';
+const UNDO = '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>';
+
+function markButton(kind, film, on, onClick) {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "skip";
-  btn.disabled = !skipsEnabled;
-  btn.setAttribute("aria-pressed", String(isSkipped));
-  btn.setAttribute("aria-label", `${isSkipped ? "Restore" : "Skip"} ${film.title}`);
-  btn.title = skipsEnabled ? (isSkipped ? "Restore" : "Skip for now") : "Skips are offline";
-  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${isSkipped ? EYE : EYE_OFF}</svg>`;
-  btn.addEventListener("click", () => skipsApi?.toggle(film.slug));
+  btn.className = kind === "skip" ? "skip" : "mark";
+  btn.setAttribute("aria-pressed", String(on));
+  const label = kind === "skip" ? (on ? "Restore" : "Skip for now") : on ? "Move back to the list" : "Mark watched";
+  btn.setAttribute("aria-label", `${label}: ${film.title}`);
+  btn.title = label;
+  const icon = kind === "skip" ? (on ? EYE : EYE_OFF) : on ? UNDO : CHECK;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+  btn.addEventListener("click", onClick);
   return btn;
 }
 
@@ -141,8 +160,9 @@ function caption(film) {
 }
 
 function renderPool() {
-  const shown = visibleFilms(data, source, filters);
-  const pool = withoutSkipped(shown, skipped);
+  const inWatched = source === "watched";
+  const shown = applyFilters(listFor(source), filters);
+  const pool = inWatched ? [] : withoutSkipped(shown, skipped);
   $("grid").replaceChildren(
     ...shown.map((film) => {
       const isSkipped = skipped.has(film.slug);
@@ -155,7 +175,11 @@ function renderPool() {
       a.rel = "noopener noreferrer";
       a.title = film.year ? `${film.title} (${film.year})` : film.title;
       a.append(posterEl(film), caption(film));
-      li.append(a, skipButton(film, isSkipped));
+      li.append(a);
+      if (user) {
+        if (!inWatched) li.append(markButton("skip", film, isSkipped, () => cloud?.toggleSkip(film.slug)));
+        li.append(markButton("watched", film, inWatched, () => cloud?.toggleWatched(film.slug)));
+      }
       return li;
     }),
   );
@@ -166,7 +190,13 @@ function renderPool() {
 
   const skippedCount = shown.length - pool.length;
   if (!shown.length) {
-    $("count").textContent = isActive(filters) ? "Nothing matches those filters." : "Nothing in this list yet.";
+    $("count").textContent = isActive(filters)
+      ? "Nothing matches those filters."
+      : inWatched
+        ? "Nothing watched yet."
+        : "Nothing in this list yet.";
+  } else if (inWatched) {
+    $("count").textContent = `${shown.length} watched`;
   } else if (!pool.length) {
     $("count").textContent = "Everything's skipped.";
   } else {
@@ -174,12 +204,24 @@ function renderPool() {
     const base = isActive(filters) ? `${pool.length} ${noun} match` : `${pool.length} ${noun} in the pool`;
     $("count").textContent = skippedCount ? `${base} · ${skippedCount} skipped` : base;
   }
+  $("pick").hidden = inWatched;
   $("pick").disabled = pool.length === 0;
 }
 
+function renderAuth() {
+  $("who").textContent = user ? (denied ? `${user.email} can't edit` : user.email) : "";
+  $("auth").textContent = user ? "Sign out" : "Sign in";
+}
+
+function renderResultMark() {
+  const btn = $("result-watched");
+  btn.hidden = !user || !current;
+  if (current) btn.textContent = watched.has(current.slug) ? "Move back to list" : "Mark watched";
+}
+
 async function pick() {
-  const pool = withoutSkipped(visibleFilms(data, source, filters), skipped);
-  if (!pool.length) return;
+  const pool = withoutSkipped(applyFilters(listFor(source), filters), skipped);
+  if (source === "watched" || !pool.length) return;
 
   const id = ++spinId;
   const winner = pool[randomInt(pool.length)];
@@ -214,7 +256,7 @@ async function init() {
     return;
   }
 
-  const keys = [...Object.keys(data.sources), "all"];
+  const keys = sourceKeys();
   const saved = store.get("spinboxd.source");
   source = keys.includes(saved) ? saved : keys[0];
 
@@ -225,11 +267,20 @@ async function init() {
   renderFilterBar();
   renderPool();
 
-  skipsApi = initSkips((slugs, enabled) => {
-    skipped = slugs;
-    skipsEnabled = enabled;
+  cloud = initCloud((next) => {
+    skipped = next.skips;
+    watched = next.watched;
+    user = next.user;
+    denied = next.denied;
     renderSources();
     renderPool();
+    renderAuth();
+    renderResultMark();
+  });
+
+  $("auth").addEventListener("click", () => (user ? cloud.signOut() : cloud.signIn()));
+  $("result-watched").addEventListener("click", async () => {
+    if (current && (await cloud.toggleWatched(current.slug))) closeStage();
   });
 
   $("pick").addEventListener("click", pick);

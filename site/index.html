@@ -48,6 +48,7 @@
 
   <footer class="wrap credit">
     <p>Rai &amp; Ia's watchlist, from <a href="https://letterboxd.com/rdgonzaga/list/rai-and-ias-watch-list/" target="_blank" rel="noopener noreferrer">our list on Letterboxd</a>. Film data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming data from <a href="https://www.justwatch.com/" target="_blank" rel="noopener noreferrer">JustWatch</a>.</p>
+    <p class="auth"><span id="who"></span> <button class="link-btn" id="auth" type="button">Sign in</button></p>
   </footer>
 
   <dialog class="stage" id="stage" aria-label="Tonight's pick">
@@ -69,6 +70,7 @@
         <p class="result-providers" id="result-providers" hidden></p>
         <div class="result-actions">
           <button class="btn btn-primary" id="respin" type="button">Spin again</button>
+          <button class="btn btn-quiet" id="result-watched" type="button" hidden>Mark watched</button>
           <button class="btn btn-quiet" id="copy-link" type="button">Copy link</button>
           <a class="btn btn-quiet" id="result-link" target="_blank" rel="noopener noreferrer">View on Letterboxd</a>
         </div>
