@@ -1,5 +1,6 @@
 import { loadWatchlist } from "./data.js";
-import { poolFor, randomInt } from "./pool.js";
+import { filterOptions, poolFor, randomInt, visibleFilms } from "./pool.js";
+import { NO_FILTERS, isActive, loadFilters, renderFilters } from "./filters.js";
 import { posterEl } from "./poster.js";
 import { spin, stopReel } from "./reel.js";
 import { showResult } from "./result.js";
@@ -24,6 +25,8 @@ const store = {
 
 let data;
 let source;
+let filters = NO_FILTERS;
+let options;
 let spinId = 0;
 
 function setView(view) {
@@ -65,8 +68,18 @@ function staleNote() {
     : `${src.label} couldn't be refreshed.`;
 }
 
+function onFilters(next) {
+  filters = next;
+  renderFilterBar();
+  renderPool();
+}
+
+function renderFilterBar() {
+  renderFilters($("filters"), options, filters, onFilters);
+}
+
 function renderPool() {
-  const pool = poolFor(data, source);
+  const pool = visibleFilms(data, source, filters);
   $("grid").replaceChildren(
     ...pool.map((film) => {
       const li = document.createElement("li");
@@ -86,14 +99,17 @@ function renderPool() {
   $("note").textContent = note;
   $("note").hidden = !note;
 
-  $("count").textContent = pool.length
-    ? `${pool.length} ${pool.length === 1 ? "film" : "films"} in the pool`
-    : "Nothing in this list yet.";
+  const noun = pool.length === 1 ? "film" : "films";
+  if (!pool.length) {
+    $("count").textContent = isActive(filters) ? "Nothing matches those filters." : "Nothing in this list yet.";
+  } else {
+    $("count").textContent = isActive(filters) ? `${pool.length} ${noun} match` : `${pool.length} ${noun} in the pool`;
+  }
   $("pick").disabled = pool.length === 0;
 }
 
 async function pick() {
-  const pool = poolFor(data, source);
+  const pool = visibleFilms(data, source, filters);
   if (!pool.length) return;
 
   const id = ++spinId;
@@ -130,7 +146,11 @@ async function init() {
   const saved = store.get("spinboxd.source");
   source = keys.includes(saved) ? saved : keys[0];
 
+  options = filterOptions(data.films);
+  filters = loadFilters(options);
+
   renderSources();
+  renderFilterBar();
   renderPool();
 
   $("pick").addEventListener("click", pick);

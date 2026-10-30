@@ -149,6 +149,35 @@ a { color: inherit; }
   text-transform: uppercase;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  padding-top: 12px;
+}
+
+.filter { display: grid; gap: 4px; }
+
+.filter span {
+  color: var(--muted);
+  font: 600 10px/1 var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.filter select {
+  min-width: 128px;
+  padding: 6px 8px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font: 400 13px/1.2 var(--sans);
+}
+
+.filters .link-btn { padding-bottom: 8px; font-size: 12px; }
+
 .note { margin: 12px 0 0; color: var(--orange); font-size: 13px; }
 
 .msg { margin: 32px 0; }
@@ -369,6 +398,8 @@ a { color: inherit; }
 /* Phones */
 
 @media (max-width: 560px) {
+  .filter select { font-size: 16px; }
+  .filter { flex: 1 1 40%; }
   .bar { flex-wrap: wrap; min-height: 0; padding-top: 12px; }
   .sources { width: 100%; margin: 0 -8px; }
   .chip { padding: 12px 8px 12px; }
