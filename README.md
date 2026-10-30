@@ -22,6 +22,13 @@ python -m venv .venv
 .venv\Scripts\python -m http.server -d site
 ```
 
+To skip the scrape and use the live data instead, pull it from the `data` branch:
+
+```
+git fetch origin data
+git restore --source=origin/data --worktree -- site/data/watchlist.json data/tmdb_cache.json
+```
+
 Then open http://localhost:8000. `pytest` runs the scraper tests, `node --test "tests/js/*.test.mjs"` the site's.
 
 Posters, runtime, genres, synopsis, rating and PH streaming availability come from TMDB (streaming data is from JustWatch). Streaming data is refreshed on every run; the rest is cached. Set `TMDB_API_KEY` (a free v3 key or read token) before scraping. Without it the scraper only uses what's already in `data/tmdb_cache.json`, and films without a match show a text poster.
@@ -36,9 +43,11 @@ Edit `config.toml`. Any `/<user>/watchlist/` or `/<user>/list/<slug>/` URL works
 
 1. Repo settings, Pages, source: GitHub Actions.
 2. Add the `TMDB_API_KEY` secret.
-3. Run the `update` workflow once by hand. After that it runs daily and commits only when the lists changed.
+3. Run the `update` workflow once by hand. After that it runs daily, and on pushes to `main` that touch the site or scraper.
 
-If a list fails to scrape, the last good data stays and the site says so. If GitHub's IPs get blocked, run the scraper from your own machine and push the JSON.
+The scraped data never lands on `main`. Each run restores the last data from the `data` branch, scrapes, force-pushes the new data there as a single commit, and deploys. So `main` only holds code, and the `data` branch always has exactly one commit.
+
+If a list fails to scrape, the last good data stays and the site says so. If GitHub's IPs get blocked, run the scraper from your own machine and commit the two data files to the `data` branch.
 
 GitHub pauses scheduled workflows after 60 days without repo activity. Re-enable it from the Actions tab.
 

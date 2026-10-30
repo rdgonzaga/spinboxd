@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [site/**, "!site/data/**"]
+    paths: [site/**, scraper/**, config.toml, data/tmdb_overrides.toml, .github/workflows/update.yml]
 
 permissions:
   contents: write
@@ -33,6 +33,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # the scraped data lives on the `data` branch so main only holds code;
+      # the scraper needs last run's list (to keep a list that fails to scrape) and the TMDB cache
+      - name: Restore last run's data
+        run: |
+          if git fetch --depth=1 origin data; then
+            git checkout FETCH_HEAD -- site/data/watchlist.json data/tmdb_cache.json
+          else
+            echo "no data branch yet, starting fresh"
+          fi
+
       - name: Scrape
         id: scrape
         env:
@@ -40,17 +50,15 @@ jobs:
         run: python -m scraper
         continue-on-error: true
 
-      - name: Commit if changed
+      # one commit with just the two data files, force-pushed, so the branch never grows a history
+      - name: Save data to the data branch
         run: |
           git config user.name "spinboxd[bot]"
           git config user.email "actions@users.noreply.github.com"
-          git add site/data/watchlist.json data/tmdb_cache.json
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
-          else
-            git commit -m "update watchlist"
-            git push
-          fi
+          export GIT_INDEX_FILE="$RUNNER_TEMP/data-index"
+          git add -f site/data/watchlist.json data/tmdb_cache.json
+          commit=$(git commit-tree "$(git write-tree)" -m "chore(data): update watchlist")
+          git push --force origin "$commit:refs/heads/data"
 
       - name: Check the TMDB key isn't in the site
         env:
