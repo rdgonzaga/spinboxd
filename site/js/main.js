@@ -437,6 +437,24 @@ function renderAuth() {
   $("who").textContent = user ? (denied ? "View only" : user.email) : "";
   $("who").title = user ? (denied ? `${user.email} can't edit` : user.email) : "";
   $("auth").textContent = user ? "Sign out" : "Sign in";
+  $("who").classList.toggle("is-denied", Boolean(user && denied));
+
+  const avatar = $("avatar");
+  avatar.hidden = !user;
+  avatar.title = user?.email || "";
+  avatar.replaceChildren();
+  if (!user) return;
+  if (user.photoURL) {
+    const img = new Image();
+    img.src = user.photoURL;
+    img.alt = "";
+    // Google's avatar host refuses requests that carry a referrer
+    img.referrerPolicy = "no-referrer";
+    img.addEventListener("error", () => avatar.replaceChildren((user.email || "?")[0].toUpperCase()), { once: true });
+    avatar.append(img);
+  } else {
+    avatar.textContent = (user.email || "?")[0].toUpperCase();
+  }
 }
 
 function renderResultMark() {
