@@ -15,7 +15,7 @@ python -m venv .venv
 
 Then open http://localhost:8000. `pytest` runs the tests.
 
-Posters, runtime and genres come from TMDB. Set `TMDB_API_KEY` (a free v3 key or read token) before scraping. Without it the scraper only uses what's already in `data/tmdb_cache.json`, and films without a match show a text poster.
+Posters, runtime, genres, synopsis, rating and PH streaming availability come from TMDB (streaming data is from JustWatch). Streaming data is refreshed on every run; the rest is cached. Set `TMDB_API_KEY` (a free v3 key or read token) before scraping. Without it the scraper only uses what's already in `data/tmdb_cache.json`, and films without a match show a text poster.
 
 Flags: `--source rai` refreshes one list, `--no-tmdb` skips the API.
 

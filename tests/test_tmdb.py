@@ -8,8 +8,29 @@ DETAILS = {
         "backdrop_path": "/b.jpg",
         "runtime": 106,
         "genres": [{"id": 18, "name": "Drama"}, {"id": 10749, "name": "Romance"}],
+        "overview": "Two childhood friends meet again.",
+        "vote_average": 7.84,
+        "vote_count": 1200,
+        "watch/providers": {
+            "results": {
+                "PH": {
+                    "link": "https://www.themoviedb.org/movie/666277/watch?locale=PH",
+                    "flatrate": [{"provider_name": "Netflix"}],
+                    "rent": [{"provider_name": "Google Play"}, {"provider_name": "Apple TV"}],
+                }
+            }
+        },
     },
-    1: {"poster_path": None, "backdrop_path": None, "runtime": 0, "genres": []},
+    1: {
+        "poster_path": None,
+        "backdrop_path": None,
+        "runtime": 0,
+        "genres": [],
+        "overview": "",
+        "vote_average": 0,
+        "vote_count": 0,
+        "watch/providers": {"results": {}},
+    },
 }
 
 
@@ -46,14 +67,51 @@ def test_lookup_builds_image_urls_and_saves_cache(tmp_path):
     assert json.loads((tmp_path / "cache.json").read_text())["past-lives"]["tmdb_id"] == 666277
 
 
-def test_cached_film_makes_no_requests(tmp_path):
+def test_lookup_includes_overview_rating_providers(tmp_path):
+    info = make(tmp_path).lookup("past-lives", "Past Lives", 2023)
+
+    assert info["overview"] == "Two childhood friends meet again."
+    assert info["rating"] == 7.8
+    assert info["providers"] == {
+        "stream": ["Netflix"],
+        "rent": ["Apple TV", "Google Play"],
+        "buy": [],
+        "link": "https://www.themoviedb.org/movie/666277/watch?locale=PH",
+    }
+
+
+def test_no_votes_or_providers_gives_empty_values(tmp_path):
+    info = make(tmp_path, overrides={"heat": 1}).lookup("heat", "Heat", 1995)
+
+    assert info["rating"] is None
+    assert info["overview"] is None
+    assert info["providers"] == {"stream": [], "rent": [], "buy": [], "link": None}
+
+
+def test_cached_film_refreshes_details_but_not_search(tmp_path):
     t = make(tmp_path)
     t.lookup("past-lives", "Past Lives", 2023)
     t.calls.clear()
 
     t.lookup("past-lives", "Past Lives", 2023)
 
-    assert t.calls == []
+    assert [path for path, _ in t.calls] == ["/movie/666277"]
+
+
+def test_cache_without_new_fields_is_upgraded(tmp_path):
+    (tmp_path / "cache.json").write_text(
+        json.dumps({"past-lives": {"tmdb_id": 666277, "poster": "x", "backdrop": None, "runtime": 1, "genres": []}})
+    )
+    t = make(tmp_path)
+
+    assert t.lookup("past-lives", "Past Lives", 2023)["overview"] == "Two childhood friends meet again."
+
+
+def test_old_cache_without_key_is_returned_unchanged(tmp_path):
+    old = {"tmdb_id": 666277, "poster": "x", "backdrop": None, "runtime": 1, "genres": []}
+    (tmp_path / "cache.json").write_text(json.dumps({"past-lives": old}))
+
+    assert Tmdb(None, tmp_path / "cache.json").lookup("past-lives", "Past Lives", 2023) == old
 
 
 def test_search_retries_without_year(tmp_path):

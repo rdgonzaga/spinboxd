@@ -104,3 +104,24 @@ def test_unchanged_scrape_leaves_file_alone(tmp_path):
     second = build.run(CONFIG, saved, None, scrape=scrape)
     assert not build.write_if_changed(out, second, saved)
     assert json.loads(out.read_text("utf-8")) == saved
+
+
+class FakeTmdb:
+    def lookup(self, slug, title, year):
+        if slug == "heat":
+            return {"tmdb_id": 1, "overview": "o", "rating": 8.1, "providers": {"stream": ["Netflix"], "rent": [], "buy": [], "link": None}}
+        return None
+
+    def save(self):
+        pass
+
+
+def test_build_passes_new_fields_through():
+    scrape = fake_scrape({"u/shared/": [item("heat"), item("ran")], "u/rai/": []})
+
+    films = {f["slug"]: f for f in build.run(CONFIG, {}, FakeTmdb(), scrape=scrape)["films"]}
+
+    assert films["heat"]["overview"] == "o"
+    assert films["heat"]["rating"] == 8.1
+    assert films["heat"]["providers"]["stream"] == ["Netflix"]
+    assert films["ran"]["overview"] is None and films["ran"]["rating"] is None and films["ran"]["providers"] is None
