@@ -7,7 +7,8 @@ import requests
 
 API = "https://api.themoviedb.org/3"
 IMG = "https://image.tmdb.org/t/p"
-FIELDS = ("tmdb_id", "poster", "backdrop", "runtime", "genres")
+REGION = "PH"
+FIELDS = ("tmdb_id", "poster", "backdrop", "runtime", "genres", "overview", "rating", "providers")
 
 
 class Tmdb:
@@ -45,26 +46,40 @@ class Tmdb:
         hits = self._get("/search/movie", query=title).get("results")
         return hits[0]["id"] if hits else None
 
+    @staticmethod
+    def _providers(raw):
+        entry = (raw.get("watch/providers") or {}).get("results", {}).get(REGION) or {}
+        names = lambda kind: sorted(p["provider_name"] for p in entry.get(kind, []))
+        return {
+            "stream": names("flatrate"),
+            "rent": names("rent"),
+            "buy": names("buy"),
+            "link": entry.get("link"),
+        }
+
     def _details(self, tmdb_id):
-        d = self._get(f"/movie/{tmdb_id}")
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="watch/providers")
         return {
             "tmdb_id": tmdb_id,
             "poster": f"{IMG}/w342{d['poster_path']}" if d.get("poster_path") else None,
             "backdrop": f"{IMG}/w780{d['backdrop_path']}" if d.get("backdrop_path") else None,
             "runtime": d.get("runtime") or None,
             "genres": [g["name"] for g in d.get("genres", [])],
+            "overview": d.get("overview") or None,
+            "rating": round(d["vote_average"], 1) if d.get("vote_count") else None,
+            "providers": self._providers(d),
         }
 
     def lookup(self, slug, title, year):
         override = self.overrides.get(slug)
         cached = self.cache.get(slug)
-        if cached and (not override or cached.get("tmdb_id") == override):
-            return cached
         if not self.enabled:
             return cached
 
+        # streaming data goes stale, so a known film still gets its details refreshed
+        known = cached.get("tmdb_id") if cached and (not override or cached.get("tmdb_id") == override) else None
         try:
-            tmdb_id = override or self._search(title, year)
+            tmdb_id = known or override or self._search(title, year)
             if not tmdb_id:
                 return None
             found = self._details(tmdb_id)
