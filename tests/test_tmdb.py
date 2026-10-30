@@ -33,6 +33,24 @@ DETAILS = {
     },
 }
 
+TV_DETAILS = {
+    105248: {
+        "poster_path": "/cp.jpg",
+        "backdrop_path": "/cb.jpg",
+        "episode_run_time": [],
+        "last_episode_to_air": {"runtime": 25},
+        "genres": [{"id": 16, "name": "Animation"}],
+        "overview": "A street kid tries to survive.",
+        "vote_average": 8.6,
+        "vote_count": 900,
+        "watch/providers": {"results": {"PH": {"flatrate": [{"provider_name": "Netflix"}]}}},
+    },
+    2: {"episode_run_time": [44, 50], "genres": [], "vote_count": 0, "watch/providers": {"results": {}}},
+}
+
+# titles with no film match; the tv search knows Edgerunners
+TV_ONLY = {"Cyberpunk: Edgerunners": 105248}
+
 
 def make(tmp_path, overrides=None, key="k" * 32):
     ov = None
@@ -44,12 +62,18 @@ def make(tmp_path, overrides=None, key="k" * 32):
 
     def fake_get(path, **params):
         t.calls.append((path, params))
+        query = params.get("query")
         if path == "/search/movie":
+            if query in TV_ONLY:
+                return {"results": []}
             if "year" in params:
-                empty = params["query"] in ("Heat", "Nothing")
+                empty = query in ("Heat", "Nothing")
                 return {"results": []} if empty else {"results": [{"id": 666277}]}
-            return {"results": [{"id": 666277}]} if params["query"] != "Nothing" else {"results": []}
-        return DETAILS[int(path.rsplit("/", 1)[1])]
+            return {"results": [{"id": 666277}]} if query != "Nothing" else {"results": []}
+        if path == "/search/tv":
+            return {"results": [{"id": TV_ONLY[query]}]} if query in TV_ONLY else {"results": []}
+        tmdb_id = int(path.rsplit("/", 1)[1])
+        return (TV_DETAILS if path.startswith("/tv/") else DETAILS)[tmdb_id]
 
     t._get = fake_get
     return t
@@ -139,6 +163,54 @@ def test_override_wins_over_search(tmp_path):
     assert info["tmdb_id"] == 1
     assert info["poster"] is None and info["runtime"] is None
     assert not any(path == "/search/movie" for path, _ in t.calls)
+
+
+def test_series_found_when_no_film_matches(tmp_path):
+    t = make(tmp_path)
+    info = t.lookup("cyberpunk-edgerunners", "Cyberpunk: Edgerunners", 2022)
+
+    assert info["kind"] == "tv" and info["tmdb_id"] == 105248
+    assert info["poster"] == "https://image.tmdb.org/t/p/w342/cp.jpg"
+    assert info["runtime"] == 25
+    assert info["genres"] == ["Animation"]
+    assert info["rating"] == 8.6
+    assert info["providers"]["stream"] == ["Netflix"]
+    tv_searches = [p for path, p in t.calls if path == "/search/tv"]
+    assert tv_searches[0]["first_air_date_year"] == 2022
+
+
+def test_cached_series_refreshes_from_tv_endpoint(tmp_path):
+    t = make(tmp_path)
+    t.lookup("cyberpunk-edgerunners", "Cyberpunk: Edgerunners", 2022)
+    t.calls.clear()
+
+    t.lookup("cyberpunk-edgerunners", "Cyberpunk: Edgerunners", 2022)
+
+    assert [path for path, _ in t.calls] == ["/tv/105248"]
+
+
+def test_film_match_is_tried_before_series(tmp_path):
+    t = make(tmp_path)
+    info = t.lookup("past-lives", "Past Lives", 2023)
+
+    assert info["kind"] == "movie"
+    assert not any(path == "/search/tv" for path, _ in t.calls)
+
+
+def test_tv_override_uses_tv_endpoint_and_episode_runtime(tmp_path):
+    t = make(tmp_path, overrides={"show": '"tv/2"'})
+    info = t.lookup("show", "Show", 2010)
+
+    assert info["kind"] == "tv" and info["tmdb_id"] == 2
+    assert info["runtime"] == 44
+    assert [path for path, _ in t.calls] == ["/tv/2"]
+
+
+def test_override_replaces_cached_match_of_other_kind(tmp_path):
+    (tmp_path / "cache.json").write_text(json.dumps({"show": {"tmdb_id": 2, "kind": "movie"}}))
+    t = make(tmp_path, overrides={"show": '"tv/2"'})
+
+    assert t.lookup("show", "Show", 2010)["kind"] == "tv"
 
 
 def test_without_key_only_cache_is_used(tmp_path):

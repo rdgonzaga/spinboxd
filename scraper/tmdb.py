@@ -8,7 +8,14 @@ import requests
 API = "https://api.themoviedb.org/3"
 IMG = "https://image.tmdb.org/t/p"
 REGION = "PH"
-FIELDS = ("tmdb_id", "poster", "backdrop", "runtime", "genres", "overview", "rating", "providers")
+FIELDS = ("tmdb_id", "kind", "poster", "backdrop", "runtime", "genres", "overview", "rating", "providers")
+
+
+def _parse_override(value):
+    """An override is a movie id, or "tv/<id>" for a series."""
+    if isinstance(value, str) and value.startswith("tv/"):
+        return "tv", int(value[3:])
+    return "movie", int(value)
 
 
 class Tmdb:
@@ -39,12 +46,16 @@ class Tmdb:
         return r.json()
 
     def _search(self, title, year):
-        if year:
-            hits = self._get("/search/movie", query=title, year=year).get("results")
+        # Letterboxd lists some series too, so a title with no film match is tried as tv
+        for kind, year_param in (("movie", "year"), ("tv", "first_air_date_year")):
+            if year:
+                hits = self._get(f"/search/{kind}", query=title, **{year_param: year}).get("results")
+                if hits:
+                    return kind, hits[0]["id"]
+            hits = self._get(f"/search/{kind}", query=title).get("results")
             if hits:
-                return hits[0]["id"]
-        hits = self._get("/search/movie", query=title).get("results")
-        return hits[0]["id"] if hits else None
+                return kind, hits[0]["id"]
+        return None
 
     @staticmethod
     def _providers(raw):
@@ -64,13 +75,23 @@ class Tmdb:
             "link": entry.get("link"),
         }
 
-    def _details(self, tmdb_id):
-        d = self._get(f"/movie/{tmdb_id}", append_to_response="watch/providers")
+    @staticmethod
+    def _runtime(d, kind):
+        if kind == "movie":
+            return d.get("runtime") or None
+        # series give per-episode runtimes, and newer ones leave the list empty
+        runs = d.get("episode_run_time") or []
+        last = d.get("last_episode_to_air") or {}
+        return (runs[0] if runs else last.get("runtime")) or None
+
+    def _details(self, kind, tmdb_id):
+        d = self._get(f"/{kind}/{tmdb_id}", append_to_response="watch/providers")
         return {
             "tmdb_id": tmdb_id,
+            "kind": kind,
             "poster": f"{IMG}/w342{d['poster_path']}" if d.get("poster_path") else None,
             "backdrop": f"{IMG}/w780{d['backdrop_path']}" if d.get("backdrop_path") else None,
-            "runtime": d.get("runtime") or None,
+            "runtime": self._runtime(d, kind),
             "genres": [g["name"] for g in d.get("genres", [])],
             "overview": d.get("overview") or None,
             "rating": round(d["vote_average"], 1) if d.get("vote_count") else None,
@@ -78,18 +99,21 @@ class Tmdb:
         }
 
     def lookup(self, slug, title, year):
-        override = self.overrides.get(slug)
+        override = _parse_override(self.overrides[slug]) if slug in self.overrides else None
         cached = self.cache.get(slug)
         if not self.enabled:
             return cached
 
-        # streaming data goes stale, so a known film still gets its details refreshed
-        known = cached.get("tmdb_id") if cached and (not override or cached.get("tmdb_id") == override) else None
+        # streaming data goes stale, so a known film still gets its details refreshed;
+        # caches from before series support have no kind, and those were all movies
+        known = (cached.get("kind") or "movie", cached["tmdb_id"]) if cached and cached.get("tmdb_id") else None
+        if override and known != override:
+            known = None
         try:
-            tmdb_id = known or override or self._search(title, year)
-            if not tmdb_id:
+            match = known or override or self._search(title, year)
+            if not match:
                 return None
-            found = self._details(tmdb_id)
+            found = self._details(*match)
         except requests.RequestException as e:
             print(f"tmdb: {slug}: {e.__class__.__name__}")
             return cached
