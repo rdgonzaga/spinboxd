@@ -82,13 +82,13 @@ export function initCloud(onChange) {
     toggleWatched: (slug) => toggle("watched", slug),
     async signIn() {
       await ready;
-      if (!api) return;
+      if (!api) return "firebase-unavailable";
       try {
         await api.au.signInWithPopup(api.auth, new api.au.GoogleAuthProvider());
+        return null;
       } catch (err) {
-        if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
-          console.warn("sign-in failed", err.code || err);
-        }
+        console.warn("sign-in failed", err.code || err);
+        return err.code || "unknown";
       }
     },
     async signOut() {

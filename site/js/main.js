@@ -278,7 +278,11 @@ async function init() {
     renderResultMark();
   });
 
-  $("auth").addEventListener("click", () => (user ? cloud.signOut() : cloud.signIn()));
+  $("auth").addEventListener("click", async () => {
+    if (user) return cloud.signOut();
+    const error = await cloud.signIn();
+    if (error) $("who").textContent = `Sign-in failed (${error})`;
+  });
   $("result-watched").addEventListener("click", async () => {
     if (current && (await cloud.toggleWatched(current.slug))) closeStage();
   });
