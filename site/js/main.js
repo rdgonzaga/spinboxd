@@ -32,7 +32,7 @@ let data;
 let source;
 let filters = NO_FILTERS;
 const VIEWS = ["large", "small", "list"];
-let sort = "list";
+let sort = "rating";
 let view = "large";
 let options;
 let skipped = new Set();
@@ -199,7 +199,7 @@ function renderViewOpts() {
       value: sort,
       onPick: (key) => {
         sort = key;
-        store.set("spinboxd.sort", sort);
+        store.set("spinboxd.sortBy", sort);
         renderViewOpts();
         renderPool();
       },
@@ -487,8 +487,8 @@ async function init() {
   options = filterOptions(data.films);
   filters = loadFilters(options);
 
-  const savedSort = store.get("spinboxd.sort");
-  sort = savedSort in SORTS ? savedSort : "list";
+  const savedSort = store.get("spinboxd.sortBy");
+  sort = savedSort in SORTS ? savedSort : "rating";
   const savedView = store.get("spinboxd.view");
   view = VIEWS.includes(savedView) ? savedView : "large";
 
