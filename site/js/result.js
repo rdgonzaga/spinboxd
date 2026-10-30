@@ -68,6 +68,6 @@ export function showResult(film) {
     providers.append(label, tail);
   }
 
-  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true }));
+  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true, size: "w342" }));
   document.getElementById("result-link").href = film.url;
 }
