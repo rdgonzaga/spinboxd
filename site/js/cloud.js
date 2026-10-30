@@ -39,7 +39,8 @@ function writeDates(dates) {
   } catch {}
 }
 
-export function initCloud(onChange) {
+// after: a promise to wait on before loading Firebase
+export function initCloud(onChange, { after = Promise.resolve() } = {}) {
   let cached = false;
   try {
     cached = localStorage.getItem("spinboxd.watched") !== null;
@@ -51,6 +52,9 @@ export function initCloud(onChange) {
 
   let api = null;
   const ready = (async () => {
+    // the cached sets already drew the page; let the posters on screen have the network
+    // before the Firebase SDK
+    await after;
     try {
       const [{ initializeApp }, fs, au] = await Promise.all([
         import(`${SDK}/firebase-app.js`),
