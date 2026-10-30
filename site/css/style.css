@@ -338,6 +338,32 @@ a { color: inherit; }
   font-size: 13px;
 }
 
+.result-rating,
+.result-providers {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.result-providers strong { color: var(--strong); font-weight: 600; }
+.result-providers a { text-decoration: underline; text-underline-offset: 2px; }
+.result-providers a:hover { color: var(--strong); }
+
+.result-overview {
+  margin: 14px 0 0;
+  color: var(--text);
+  font: 400 15px/1.5 var(--serif);
+}
+
+.result-overview.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+
+.more { margin-top: 4px; font-size: 13px; }
+
 .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 
 /* Phones */
