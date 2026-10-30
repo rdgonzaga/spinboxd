@@ -128,6 +128,18 @@ function skipButton(film, isSkipped) {
   return btn;
 }
 
+// shown on hover and keyboard focus; posters with no title baked in need this
+function caption(film) {
+  const el = document.createElement("span");
+  el.className = "caption";
+  const title = document.createElement("strong");
+  title.textContent = film.title;
+  const meta = [film.year, film.rating ? `★ ${film.rating.toFixed(1)}` : ""].filter(Boolean).join(" · ");
+  el.append(title);
+  if (meta) el.append(meta);
+  return el;
+}
+
 function renderPool() {
   const shown = visibleFilms(data, source, filters);
   const pool = withoutSkipped(shown, skipped);
@@ -142,7 +154,7 @@ function renderPool() {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       a.title = film.year ? `${film.title} (${film.year})` : film.title;
-      a.append(posterEl(film));
+      a.append(posterEl(film), caption(film));
       li.append(a, skipButton(film, isSkipped));
       return li;
     }),

@@ -12,7 +12,12 @@ function blank(film) {
   return nodes;
 }
 
-export function posterEl(film, { eager = false } = {}) {
+// TMDB serves the same poster at several widths; the grid never needs the big one
+function sized(url, size) {
+  return url.replace(/\/w\d+\//, `/${size}/`);
+}
+
+export function posterEl(film, { eager = false, size = "w185" } = {}) {
   const box = document.createElement("div");
   box.className = "poster";
 
@@ -26,7 +31,7 @@ export function posterEl(film, { eager = false } = {}) {
   img.alt = film.title;
   img.decoding = "async";
   img.loading = eager ? "eager" : "lazy";
-  img.src = film.poster;
+  img.src = sized(film.poster, size);
   img.addEventListener(
     "error",
     () => {

@@ -39,6 +39,7 @@ function select(label, choices, value, onPick) {
     el.append(opt);
   }
   el.value = value === null ? "" : String(value);
+  el.classList.toggle("is-set", value !== null);
   el.addEventListener("change", () => onPick(el.value === "" ? null : el.value));
   wrap.append(text, el);
   return wrap;
