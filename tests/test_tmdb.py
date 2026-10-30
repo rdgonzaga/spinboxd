@@ -15,8 +15,8 @@ DETAILS = {
             "results": {
                 "PH": {
                     "link": "https://www.themoviedb.org/movie/666277/watch?locale=PH",
-                    "flatrate": [{"provider_name": "Netflix"}],
-                    "rent": [{"provider_name": "Google Play"}, {"provider_name": "Apple TV"}],
+                    "flatrate": [{"provider_name": "Netflix", "logo_path": "/nf.jpg"}],
+                    "rent": [{"provider_name": "Google Play"}, {"provider_name": "Apple TV", "logo_path": "/atv.jpg"}],
                 }
             }
         },
@@ -76,6 +76,10 @@ def test_lookup_includes_overview_rating_providers(tmp_path):
         "stream": ["Netflix"],
         "rent": ["Apple TV", "Google Play"],
         "buy": [],
+        "logos": {
+            "Apple TV": "https://image.tmdb.org/t/p/w92/atv.jpg",
+            "Netflix": "https://image.tmdb.org/t/p/w92/nf.jpg",
+        },
         "link": "https://www.themoviedb.org/movie/666277/watch?locale=PH",
     }
 
@@ -85,7 +89,7 @@ def test_no_votes_or_providers_gives_empty_values(tmp_path):
 
     assert info["rating"] is None
     assert info["overview"] is None
-    assert info["providers"] == {"stream": [], "rent": [], "buy": [], "link": None}
+    assert info["providers"] == {"stream": [], "rent": [], "buy": [], "logos": {}, "link": None}
 
 
 def test_cached_film_refreshes_details_but_not_search(tmp_path):

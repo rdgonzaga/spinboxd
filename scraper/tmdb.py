@@ -50,10 +50,17 @@ class Tmdb:
     def _providers(raw):
         entry = (raw.get("watch/providers") or {}).get("results", {}).get(REGION) or {}
         names = lambda kind: sorted(p["provider_name"] for p in entry.get(kind, []))
+        logos = {
+            p["provider_name"]: f"{IMG}/w92{p['logo_path']}"
+            for kind in ("flatrate", "rent", "buy")
+            for p in entry.get(kind, [])
+            if p.get("logo_path")
+        }
         return {
             "stream": names("flatrate"),
             "rent": names("rent"),
             "buy": names("buy"),
+            "logos": dict(sorted(logos.items())),
             "link": entry.get("link"),
         }
 
