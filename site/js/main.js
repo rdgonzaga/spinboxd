@@ -58,23 +58,38 @@ function present(film, { browse = false } = {}) {
     store.set("spinboxd.last", lastPick);
     renderPool();
   }
-  $("respin").textContent = browse ? "Pick a film" : "Spin again";
+  $("respin-label").textContent = browse ? "Pick a film" : "Spin again";
   $("respin").hidden = source === "watched";
   showResult(film);
   renderResultMark();
   setView("result");
+  // keep the stage marker on the entry openStage pushed
   if (browse) clearHash();
-  else history.replaceState(null, "", pickHash(film.slug));
+  else history.replaceState(history.state, "", pickHash(film.slug));
 }
 
 function focusResult() {
   ($("respin").hidden ? $("result-title") : $("respin")).focus();
 }
 
+// The open card gets its own history entry, so the phone's back gesture closes it
+// instead of leaving the site. Closing it any other way pops that entry.
+function openStage() {
+  const stage = $("stage");
+  if (stage.open) return;
+  stage.showModal();
+  stage.scrollTop = 0;
+  // a shared #pick link would reopen the card when back lands on it, so the entry
+  // underneath keeps a bare URL and only the card's entry carries the hash
+  const url = location.href;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  history.pushState({ stage: true }, "", url);
+}
+
 function openFilm(film) {
   spinId++;
   stopReel($("strip"));
-  if (!$("stage").open) $("stage").showModal();
+  openStage();
   present(film, { browse: true });
   focusResult();
 }
@@ -85,18 +100,22 @@ function openShared() {
   if (!film) return;
   spinId++;
   stopReel($("strip"));
-  if (!$("stage").open) $("stage").showModal();
+  openStage();
   present(film);
   focusResult();
 }
 
 async function copyLink() {
   if (!current) return;
-  const btn = $("copy-link");
+  const label = $("copy-label");
   const result = await copyOrShare(shareLink(current.slug), current.title);
-  btn.textContent = result === "copied" ? "Link copied" : result === "failed" ? "Couldn't copy" : "Copy link";
+  label.textContent = result === "copied" ? "Link copied" : result === "failed" ? "Couldn't copy" : "Copy link";
+  $("copy-link").classList.toggle("is-done", result === "copied");
   clearTimeout(copyTimer);
-  copyTimer = setTimeout(() => (btn.textContent = "Copy link"), 2000);
+  copyTimer = setTimeout(() => {
+    label.textContent = "Copy link";
+    $("copy-link").classList.remove("is-done");
+  }, 2000);
 }
 
 function setView(view) {
@@ -386,8 +405,14 @@ function renderPool() {
     const base = isActive(filters) ? `${pool.length} ${noun} match` : `${pool.length} ${noun} in the pool`;
     $("count").textContent = skippedCount ? `${base} · ${skippedCount} skipped` : base;
   }
-  $("pick").hidden = inWatched;
+  $("dock").hidden = inWatched;
   $("pick").disabled = pool.length === 0;
+  $("dock-count").replaceChildren();
+  if (pool.length) {
+    const n = document.createElement("strong");
+    n.textContent = pool.length;
+    $("dock-count").append(n, pool.length === 1 ? " film" : " films", document.createElement("br"), isActive(filters) ? "match your filters" : "in the pool");
+  }
 }
 
 function renderEmpty(empty, inWatched) {
@@ -460,7 +485,10 @@ function renderAuth() {
 function renderResultMark() {
   const btn = $("result-watched");
   btn.hidden = !user || !current;
-  if (current) btn.textContent = watched.has(current.slug) ? "Move back to list" : "Mark watched";
+  if (!current) return;
+  const label = watched.has(current.slug) ? "Move back to list" : "Mark watched";
+  $("result-watched-label").textContent = label;
+  btn.title = label;
 }
 
 async function pick() {
@@ -469,21 +497,23 @@ async function pick() {
 
   const id = ++spinId;
   const winner = pool[randomInt(pool.length)];
-  const stage = $("stage");
-  if (!stage.open) stage.showModal();
+  openStage();
 
   if (!reduceMotion.matches) {
+    $("reel-label").textContent = `Picking from ${pool.length} ${pool.length === 1 ? "film" : "films"}`;
     setView("reel");
+    $("stage").scrollTop = 0;
     await spin($("reel"), $("strip"), pool, winner).catch(() => {});
     if (id !== spinId) return;
   }
 
   present(winner);
+  $("stage").scrollTop = 0;
   focusResult();
 }
 
 function clearHash() {
-  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  if (location.hash) history.replaceState(history.state, "", location.pathname + location.search);
 }
 
 function closeStage() {
@@ -589,6 +619,12 @@ async function init() {
     spinId++;
     stopReel($("strip"));
     clearHash();
+    // closed by the button or Escape: drop the entry openStage pushed
+    if (history.state?.stage) history.back();
+  });
+  // back gesture or button while the card is open
+  window.addEventListener("popstate", () => {
+    if ($("stage").open && !history.state?.stage) $("stage").close();
   });
   document.addEventListener("keydown", (e) => {
     const t = e.target;

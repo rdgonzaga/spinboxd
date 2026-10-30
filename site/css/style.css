@@ -30,12 +30,7 @@
   --orange: #ff8000;
   --blue: #40bcf4;
   --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --cell: 110px;
   color-scheme: dark;
-}
-
-@media (min-width: 720px) {
-  :root { --cell: 150px; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -752,7 +747,22 @@ button.tile-foot:hover { background: var(--raised); }
 
 .stage::backdrop { background: rgba(20, 24, 28, 0.88); }
 
-.stage-bar { display: flex; justify-content: flex-end; padding: 4px 8px 0; }
+/* desktop: the old CLOSE text link in a bar above the reel or card */
+.stage-close {
+  display: block;
+  margin: 4px 8px 0 auto;
+  padding: 12px 8px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: 600 12px/1 var(--sans);
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.stage-close:hover { color: var(--strong); }
+.stage-close svg { display: none; }
 
 .link-btn {
   border: 0;
@@ -767,10 +777,17 @@ button.tile-foot:hover { background: var(--raised); }
 
 .link-btn:hover { color: var(--strong); }
 
-.reel { position: relative; overflow: hidden; padding-block: 16px; }
+.reel { --reel-cell: 110px; }
+.reel-label { display: none; }
 
-.reel::before,
-.reel::after {
+@media (min-width: 720px) {
+  .reel { --reel-cell: 150px; }
+}
+
+.reel-window { position: relative; overflow: hidden; padding-block: 16px; }
+
+.reel-window::before,
+.reel-window::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -781,19 +798,27 @@ button.tile-foot:hover { background: var(--raised); }
   z-index: 1;
 }
 
-.reel::before { top: 0; }
-.reel::after { bottom: 0; }
+.reel-window::before { top: 0; }
+.reel-window::after { bottom: 0; }
 
 .reel-strip { position: relative; display: flex; gap: 8px; width: max-content; }
-.reel-strip .poster { flex: none; width: var(--cell); }
+.reel-strip .poster { flex: none; width: var(--reel-cell); }
 
+/* desktop: poster on the left, titles, text and actions stacked on the right */
 .result {
   display: grid;
   grid-template-columns: minmax(0, 200px) 1fr;
+  grid-template-rows: auto auto 1fr;
   align-items: start;
-  gap: 28px;
+  gap: 0 28px;
   padding: 120px 28px 32px;
 }
+
+.result-head { display: contents; }
+.result-poster { grid-column: 1; grid-row: 1 / span 3; }
+.result-titles,
+.result-body,
+.result-actions { grid-column: 2; min-width: 0; }
 
 .result { position: relative; }
 
@@ -813,7 +838,7 @@ button.tile-foot:hover { background: var(--raised); }
 .result-poster .poster { width: 100%; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.6); }
 
 /* the title starts below the banner, so text always sits on the solid background */
-.result-body { padding-top: 92px; min-width: 0; }
+.result-titles { padding-top: 92px; }
 
 .chip-pill {
   display: inline-block;
@@ -892,6 +917,13 @@ button.tile-foot:hover { background: var(--raised); }
 
 .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
 
+/* icons are for the phone layout; desktop keeps text buttons */
+.result-actions svg,
+.dock svg { display: none; }
+
+.dock { display: flex; align-items: center; }
+.dock-count { display: none; }
+
 /* Touch screens: 44px tap targets */
 
 @media (pointer: coarse) {
@@ -928,27 +960,197 @@ button.tile-foot:hover { background: var(--raised); }
 
   .heading { margin-top: 20px; }
 
-  main { padding-bottom: 72px; }
+  main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
-  .btn-primary#pick {
+  /* Pick bar: docked to the bottom edge like an app's tab bar, with the pool size beside it */
+  .dock {
     position: fixed;
-    z-index: 2;
-    left: 16px;
-    right: 16px;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    padding: 16px;
-    box-shadow: 0 0 0 8px var(--bg);
+    z-index: 10;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(20, 24, 28, 0.82);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    backdrop-filter: blur(16px) saturate(1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .toast { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 68px); }
+  .dock-count { display: block; margin: 0; min-width: 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .dock-count strong { color: var(--strong); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-  .stage { height: 100%; max-height: 100%; border-radius: 0; border-inline: 0; }
+  .dock svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 
-  .result { grid-template-columns: 1fr; gap: 20px; padding: 90px 16px 24px; }
-  .result-poster { width: 150px; }
-  .result-body { padding-top: 0; }
-  .result h2 { font-size: 26px; }
-  .result-actions .btn { flex: 1 1 auto; padding-block: 14px; }
+  .heading .dock .btn-primary { flex: none; gap: 10px; height: 50px; padding: 0 24px; border-radius: 4px; }
+
+  .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+
+  /* The card: a full-screen sheet that scrolls, a round X that stays put, and the
+     actions pinned to the bottom where a thumb reaches them */
+  .stage {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .stage::backdrop { background: var(--bg); }
+
+  .stage-close {
+    position: sticky;
+    z-index: 5;
+    top: max(12px, env(safe-area-inset-top));
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: max(12px, env(safe-area-inset-top)) 12px -56px auto;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(14, 17, 20, 0.7);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+    color: var(--strong);
+  }
+
+  .stage-close svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
+
+  .stage-close .label,
+  .icon-btn .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Reel: centred on the screen, big posters, the edges fading out */
+  .reel {
+    --reel-cell: 46vw;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+    min-height: 100%;
+    padding: 72px 0 48px;
+  }
+
+  .reel-label {
+    display: block;
+    margin: 0;
+    color: var(--muted);
+    font: 600 11px/1 var(--sans);
+    letter-spacing: 0.1em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .reel-window {
+    padding-block: 22px;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
+  }
+
+  .reel-window::before,
+  .reel-window::after { height: 16px; width: 3px; margin-left: -1.5px; border-radius: 2px; }
+
+  .reel-strip { gap: 12px; }
+  .reel-strip .poster { border-radius: 6px; transition: opacity 0.35s, transform 0.35s, box-shadow 0.35s; }
+  .reel-strip.is-landed .poster { opacity: 0.2; }
+
+  .reel-strip.is-landed .poster.is-winner {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 0 0 2px var(--green), 0 14px 44px rgba(0, 224, 84, 0.22);
+  }
+
+  /* Card layout: backdrop on top, poster beside the title, text, then the action bar */
+  .result { display: flex; flex-direction: column; align-items: stretch; min-height: 100%; padding: 0; }
+  /* the head takes all the spare height and the backdrop fills it, so a short card reads
+     as a full-bleed hero with the details resting just above the action bar, not a
+     block of text with a gap under it */
+  .result-head {
+    position: relative;
+    flex: 1 0 auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    min-height: 330px;
+    padding: 150px 16px 0;
+  }
+
+  .result-backdrop {
+    inset: 0;
+    height: auto;
+    opacity: 0.9;
+    -webkit-mask-image: linear-gradient(#000 45%, rgba(0, 0, 0, 0.35) 78%, transparent);
+    mask-image: linear-gradient(#000 45%, rgba(0, 0, 0, 0.35) 78%, transparent);
+  }
+
+  .result-poster,
+  .result-titles { position: relative; }
+  .result-poster { flex: none; width: 112px; }
+  .result-titles { flex: 1; min-width: 0; padding-top: 0; }
+  .result .eyebrow { margin-bottom: 8px; padding-bottom: 6px; }
+  .result h2 { font-size: 24px; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6); }
+  .result .year { font-size: 14px; }
+  .result-meta { gap: 2px 12px; margin-top: 8px; }
+
+  .result-body { padding: 4px 16px 24px; }
+
+  .result .result-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    flex-wrap: nowrap;
+    margin-top: auto;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(20, 24, 28, 0.86);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    backdrop-filter: blur(16px) saturate(1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .result-actions svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .result-actions .btn-primary { flex: 1; gap: 10px; height: 50px; font-size: 13px; }
+  .result-actions .icon-btn { position: relative; flex: none; width: 50px; height: 50px; padding: 0; }
+  .icon-btn.is-done { color: var(--green); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
