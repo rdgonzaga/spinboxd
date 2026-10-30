@@ -30,6 +30,19 @@ export function visibleFilms(data, source, filters) {
   return poolFor(data, source).filter((f) => matches(f, filters));
 }
 
+export function withoutSkipped(films, skipped) {
+  return films.filter((f) => !skipped.has(f.slug));
+}
+
+export function parseCachedSkips(raw) {
+  try {
+    const list = JSON.parse(raw);
+    return new Set(Array.isArray(list) ? list.filter((s) => typeof s === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 // rejection sampling so the modulo doesn't favour low indexes
 export function randomInt(n) {
   const limit = Math.floor(2 ** 32 / n) * n;

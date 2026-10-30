@@ -1,10 +1,11 @@
 import { loadWatchlist } from "./data.js";
-import { filterOptions, poolFor, randomInt, visibleFilms } from "./pool.js";
+import { filterOptions, poolFor, randomInt, visibleFilms, withoutSkipped } from "./pool.js";
 import { NO_FILTERS, isActive, loadFilters, renderFilters } from "./filters.js";
 import { posterEl } from "./poster.js";
 import { spin, stopReel } from "./reel.js";
 import { showResult } from "./result.js";
 import { copyOrShare, parsePickHash, pickHash, shareLink } from "./share.js";
+import { initSkips } from "./skips.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -28,6 +29,9 @@ let data;
 let source;
 let filters = NO_FILTERS;
 let options;
+let skipped = new Set();
+let skipsEnabled = false;
+let skipsApi;
 let spinId = 0;
 let current = null;
 let copyTimer;
@@ -74,7 +78,7 @@ function renderSources() {
       chip.setAttribute("aria-pressed", String(key === source));
       const count = document.createElement("span");
       count.className = "n";
-      count.textContent = poolFor(data, key).length;
+      count.textContent = withoutSkipped(poolFor(data, key), skipped).length;
       chip.append(key === "all" ? "All" : data.sources[key].label, count);
       chip.addEventListener("click", () => {
         source = key;
@@ -108,11 +112,30 @@ function renderFilterBar() {
   renderFilters($("filters"), options, filters, onFilters);
 }
 
+const EYE = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
+const EYE_OFF = EYE + '<path d="M3 3l18 18"/>';
+
+function skipButton(film, isSkipped) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "skip";
+  btn.disabled = !skipsEnabled;
+  btn.setAttribute("aria-pressed", String(isSkipped));
+  btn.setAttribute("aria-label", `${isSkipped ? "Restore" : "Skip"} ${film.title}`);
+  btn.title = skipsEnabled ? (isSkipped ? "Restore" : "Skip for now") : "Skips are offline";
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${isSkipped ? EYE : EYE_OFF}</svg>`;
+  btn.addEventListener("click", () => skipsApi?.toggle(film.slug));
+  return btn;
+}
+
 function renderPool() {
-  const pool = visibleFilms(data, source, filters);
+  const shown = visibleFilms(data, source, filters);
+  const pool = withoutSkipped(shown, skipped);
   $("grid").replaceChildren(
-    ...pool.map((film) => {
+    ...shown.map((film) => {
+      const isSkipped = skipped.has(film.slug);
       const li = document.createElement("li");
+      li.classList.toggle("is-skipped", isSkipped);
       const a = document.createElement("a");
       a.className = "tile";
       a.href = film.url;
@@ -120,7 +143,7 @@ function renderPool() {
       a.rel = "noopener noreferrer";
       a.title = film.year ? `${film.title} (${film.year})` : film.title;
       a.append(posterEl(film));
-      li.append(a);
+      li.append(a, skipButton(film, isSkipped));
       return li;
     }),
   );
@@ -129,17 +152,21 @@ function renderPool() {
   $("note").textContent = note;
   $("note").hidden = !note;
 
-  const noun = pool.length === 1 ? "film" : "films";
-  if (!pool.length) {
+  const skippedCount = shown.length - pool.length;
+  if (!shown.length) {
     $("count").textContent = isActive(filters) ? "Nothing matches those filters." : "Nothing in this list yet.";
+  } else if (!pool.length) {
+    $("count").textContent = "Everything's skipped.";
   } else {
-    $("count").textContent = isActive(filters) ? `${pool.length} ${noun} match` : `${pool.length} ${noun} in the pool`;
+    const noun = pool.length === 1 ? "film" : "films";
+    const base = isActive(filters) ? `${pool.length} ${noun} match` : `${pool.length} ${noun} in the pool`;
+    $("count").textContent = skippedCount ? `${base} · ${skippedCount} skipped` : base;
   }
   $("pick").disabled = pool.length === 0;
 }
 
 async function pick() {
-  const pool = visibleFilms(data, source, filters);
+  const pool = withoutSkipped(visibleFilms(data, source, filters), skipped);
   if (!pool.length) return;
 
   const id = ++spinId;
@@ -185,6 +212,13 @@ async function init() {
   renderSources();
   renderFilterBar();
   renderPool();
+
+  skipsApi = initSkips((slugs, enabled) => {
+    skipped = slugs;
+    skipsEnabled = enabled;
+    renderSources();
+    renderPool();
+  });
 
   $("pick").addEventListener("click", pick);
   $("respin").addEventListener("click", pick);
