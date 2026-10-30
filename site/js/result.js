@@ -78,6 +78,6 @@ export function showResult(film) {
   backdrop.style.backgroundImage = film.backdrop ? `url("${film.backdrop}")` : "";
   backdrop.hidden = !film.backdrop;
 
-  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true, size: "w500" }));
+  document.getElementById("result-poster").replaceChildren(posterEl(film, { eager: true, sizes: "(max-width: 560px) 150px, 200px" }));
   document.getElementById("result-link").href = film.url;
 }

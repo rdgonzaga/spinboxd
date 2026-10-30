@@ -32,6 +32,8 @@ let data;
 let source;
 let filters = NO_FILTERS;
 const VIEWS = ["large", "small", "list"];
+// drawn poster widths per grid view, matching the column rules in style.css
+const TILE_SIZES = { large: "(max-width: 719px) 50vw, 220px", small: "(max-width: 719px) 34vw, 130px" };
 let sort = "rating";
 let view = "large";
 let options;
@@ -339,9 +341,9 @@ function renderPool() {
         const text = document.createElement("span");
         text.className = "row-text";
         text.append(title, rowMeta(film));
-        a.append(posterEl(film), text);
+        a.append(posterEl(film, { sizes: "44px" }), text);
       } else {
-        a.append(posterEl(film, { size: view === "large" ? "w500" : "w342" }), caption(film));
+        a.append(posterEl(film, { sizes: TILE_SIZES[view] }), caption(film));
       }
       li.append(a);
       const foot = inWatched && tileFoot(film);
@@ -472,6 +474,18 @@ function closeStage() {
   $("stage").close();
 }
 
+// resolves when the posters in the first screenful have loaded (or failed), or after 4s
+function visiblePostersLoaded() {
+  const settle = (img) =>
+    img.complete ? null : new Promise((r) => {
+      img.addEventListener("load", r, { once: true });
+      img.addEventListener("error", r, { once: true });
+    });
+  const onScreen = [...$("grid").querySelectorAll("img")].filter((img) => img.getBoundingClientRect().top < innerHeight);
+  const waits = onScreen.map(settle).filter(Boolean);
+  return Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, 4000))]);
+}
+
 async function init() {
   try {
     data = await loadWatchlist();
@@ -506,7 +520,21 @@ async function init() {
     });
   }
 
+  // auth and both snapshots each report on load, mostly repeating the cache; rebuilding
+  // every poster for an identical state is what made the grid flicker and stall
+  let lastState = "";
   cloud = initCloud((next) => {
+    const state = JSON.stringify([
+      [...next.skips].sort(),
+      [...next.watched].sort(),
+      [...next.watchedAt].map(([slug, d]) => [slug, d?.getTime()]).sort(),
+      next.user?.uid,
+      next.user?.email,
+      next.denied,
+      next.synced,
+    ]);
+    if (state === lastState) return;
+    lastState = state;
     skipped = next.skips;
     watched = next.watched;
     watchedAt = next.watchedAt;
@@ -517,7 +545,7 @@ async function init() {
     renderPool();
     renderAuth();
     renderResultMark();
-  });
+  }, { after: visiblePostersLoaded() });
 
   $("auth").addEventListener("click", async () => {
     if (user) return cloud.signOut();
