@@ -45,6 +45,20 @@ a { color: inherit; }
 
 /* Header */
 
+.tagline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 20px 0 0;
+  font: 600 11px/1.4 var(--sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tagline strong { color: var(--text); font-weight: 600; }
+.tagline a { text-underline-offset: 2px; }
+.tagline a:hover { color: var(--text); }
+
 .top { background: var(--bg); border-bottom: 1px solid var(--line); }
 
 .bar {
