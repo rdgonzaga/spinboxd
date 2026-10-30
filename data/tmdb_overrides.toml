@@ -1,0 +1,2 @@
+# slug = tmdb id, for films the title/year search gets wrong
+[overrides]

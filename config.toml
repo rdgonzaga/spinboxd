@@ -1,0 +1,14 @@
+default_source = "shared"
+delay_seconds = 3
+
+[sources.shared]
+label = "Our list"
+url = "https://letterboxd.com/rdgonzaga/list/rai-and-ias-watch-list/"
+
+[sources.rai]
+label = "Rai"
+url = "https://letterboxd.com/rdgonzaga/watchlist/"
+
+[sources.julia]
+label = "Julia"
+url = "https://letterboxd.com/jmjzarate/watchlist/"

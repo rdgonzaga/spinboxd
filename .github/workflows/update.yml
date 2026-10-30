@@ -1,0 +1,75 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [site/**, "!site/data/**"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Scrape
+        id: scrape
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: python -m scraper
+        continue-on-error: true
+
+      - name: Commit if changed
+        run: |
+          git config user.name "spinboxd[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git add site/data/watchlist.json data/tmdb_cache.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "update watchlist"
+            git push
+          fi
+
+      - name: Check the TMDB key isn't in the site
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          if [ -n "$TMDB_API_KEY" ] && grep -rqF "$TMDB_API_KEY" site; then
+            echo "TMDB key found in site/, not deploying"
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Fail if the main list didn't scrape
+        if: steps.scrape.outcome == 'failure'
+        run: exit 1
